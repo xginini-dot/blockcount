@@ -1,0 +1,899 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <title>신경차단술 수진자당 횟수 조회</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <!-- SheetJS (엑셀 파서) -->
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+
+  <style>
+    :root {
+      --bg: #020617;
+      --card: #0b1120;
+      --accent: #f97316;
+      --accent-soft: rgba(249,115,22,0.12);
+      --text: #e5e7eb;
+      --muted: #9ca3af;
+      --table-border: #1f2937;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      padding: 24px;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
+        Roboto, Helvetica, Arial, sans-serif;
+      background: radial-gradient(circle at top, #111827 0, #020617 55%);
+      color: var(--text);
+    }
+
+    h1 {
+      margin: 0 0 8px;
+      font-size: 24px;
+      letter-spacing: 0.03em;
+    }
+
+    .sub {
+      margin-bottom: 24px;
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    .card {
+      background: var(--card);
+      border-radius: 18px;
+      padding: 18px 20px;
+      box-shadow: 0 18px 40px rgba(0,0,0,0.55);
+      border: 1px solid #111827;
+      max-width: 1180px;
+      margin-bottom: 16px;
+    }
+
+    .row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 16px;
+    }
+
+    .row > .col {
+      flex: 1 1 260px;
+    }
+
+    label {
+      font-size: 13px;
+      color: var(--muted);
+      display: block;
+      margin-bottom: 4px;
+    }
+
+    input[type="file"],
+    select {
+      width: 100%;
+      padding: 8px 10px;
+      border-radius: 10px;
+      border: 1px solid #1f2937;
+      background: #020617;
+      color: var(--text);
+      font-size: 13px;
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 9px;
+      border-radius: 999px;
+      background: var(--accent-soft);
+      color: #fed7aa;
+      font-size: 11px;
+      margin-right: 8px;
+    }
+
+    .badge-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--accent);
+    }
+
+    .status {
+      font-size: 12px;
+      color: var(--muted);
+      margin-top: 8px;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 10px;
+      font-size: 12px;
+    }
+
+    th, td {
+      border: 1px solid var(--table-border);
+      padding: 6px 8px;
+      text-align: center;
+      white-space: nowrap;
+    }
+
+    th {
+      background: #020617;
+      font-weight: 600;
+      font-size: 11px;
+    }
+
+    tbody tr:nth-child(even) {
+      background: #020617;
+    }
+
+    tbody tr:nth-child(odd) {
+      background: #020617;
+    }
+
+    tbody tr.highlight {
+      background: #111827;
+      font-weight: 600;
+    }
+
+    .num-red {
+      color: #f97316;
+      font-weight: 600;
+    }
+
+    .section-title {
+      font-size: 14px;
+      font-weight: 600;
+      margin-top: 8px;
+      margin-bottom: 4px;
+    }
+
+    .hint {
+      font-size: 11px;
+      color: var(--muted);
+      margin-top: 4px;
+      line-height: 1.4;
+    }
+
+    .flex-between {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    code {
+      font-size: 11px;
+      background: #020617;
+      padding: 2px 4px;
+      border-radius: 4px;
+    }
+
+    @media (max-width: 720px) {
+      body { padding: 16px; }
+      .card { padding: 14px 12px; }
+      table { font-size: 11px; }
+      th, td { padding: 4px 5px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="flex-between">
+      <div>
+        <div class="badge">
+          <span class="badge-dot"></span>
+          신경차단술 자동 통계
+        </div>
+        <h1>신경차단술 수진자당 횟수 조회</h1>
+        <div class="sub">
+          의사랑 <b>환자별 소모통계</b> 엑셀(1~2월 등)을 업로드하면<br/>
+          보험유형별 · 65세 이상/미만 수진자당 신경차단술 횟수를 계산합니다.<br/>
+          <span style="font-size:12px;color:var(--muted);">
+            ※ 동일 환자(차트번호)·동일 날짜에 여러 LA코드가 있어도 <b>1회 방문</b>으로 합산합니다.
+          </span>
+        </div>
+      </div>
+      <div style="font-size:12px;color:var(--muted);text-align:right;">
+        LA 코드 (파일 내 실제 사용분):<br/>
+        <code id="laCodeList">-</code>
+      </div>
+    </div>
+
+    <div class="row">
+      <div class="col">
+        <label for="file">환자별 소모통계 엑셀 파일 (*.xls, *.xlsx)</label>
+        <input type="file" id="file" accept=".xls,.xlsx" />
+        <div class="hint">
+          의사랑 <b>환자별 소모통계</b>에서 추출한 원본 그대로 올리시면 됩니다.<br/>
+          필수 컬럼(제목만 맞으면 됩니다):<br/>
+          <code>코드, 보험유형, 환자번호/차트번호, 일자, 주민번호(또는 생년월일), 총투여량 또는 (1회투여량+투여일수)</code>
+        </div>
+      </div>
+
+      <div class="col">
+        <label>조회 월 (n~m월)</label>
+        <div class="row" style="gap:8px;">
+          <div class="col">
+            <select id="monthStart" disabled></select>
+          </div>
+          <div class="col">
+            <select id="monthEnd" disabled></select>
+          </div>
+        </div>
+        <div class="hint">
+          업로드 후 선택 가능합니다. 예)<br/>
+          <code>2025-01 ~ 2025-02</code>, <code>2025-02 ~ 2025-02</code>(2월만) 등 범위 조회.
+        </div>
+      </div>
+    </div>
+
+    <div id="status" class="status">엑셀 파일을 선택하면 자동으로 분석합니다.</div>
+  </div>
+
+  <div class="card">
+    <div class="section-title">① 신경차단술 요약 (보험유형별)</div>
+    <div id="tableSummaryWrapper"></div>
+
+    <div class="section-title" style="margin-top:18px;">② 65세 이상 / 65세 미만 비율 및 건당 횟수</div>
+    <div id="tableAgeWrapper"></div>
+  </div>
+
+  <script>
+    // ===== 설정값 =====
+    // LA코드는 LA200 ~ LA400 사이만 신경차단술로 인정
+    const LA_MIN = 200;
+    const LA_MAX = 400;
+
+    // 보험유형 표시 순서
+    const TYPE_ORDER = [
+      "총합계",
+      "국민건강보험",
+      "보호1종",
+      "보호2종",
+      "일반",
+      "자보-청구분",
+      "건보+보호"
+    ];
+
+    const statusEl = document.getElementById("status");
+    const tableSummaryWrapper = document.getElementById("tableSummaryWrapper");
+    const tableAgeWrapper = document.getElementById("tableAgeWrapper");
+    const fileInput = document.getElementById("file");
+    const monthStartSelect = document.getElementById("monthStart");
+    const monthEndSelect = document.getElementById("monthEnd");
+    const laCodeListEl = document.getElementById("laCodeList");
+
+    let allRows = [];    // 전체 엑셀 데이터 (JSON)
+    let allMonths = [];  // 발견된 월 리스트 (YYYY-MM)
+
+    // 자동 컬럼 매핑 정보
+    let colMap = {
+      code: null,       // LA 코드
+      type: null,       // 보험유형
+      chart: null,      // 차트번호/환자번호
+      date: null,       // 일자
+      rrn: null,        // 주민번호/생년월일
+      totalDose: null,  // 총투여량
+      dose: null,       // 1회투여량
+      days: null        // 투여일수
+    };
+
+    fileInput.addEventListener("change", handleFile);
+    monthStartSelect.addEventListener("change", recalc);
+    monthEndSelect.addEventListener("change", recalc);
+
+    // ========== 파일 로딩 ==========
+    function handleFile(evt) {
+      const file = evt.target.files[0];
+      if (!file) return;
+
+      statusEl.textContent = "엑셀을 읽는 중입니다...";
+
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        try {
+          const data = e.target.result;
+          const workbook = XLSX.read(data, {
+            type: "binary",
+            cellDates: true,
+          });
+
+          const firstSheetName = workbook.SheetNames[0];
+          const ws = workbook.Sheets[firstSheetName];
+
+          const json = XLSX.utils.sheet_to_json(ws, { defval: null });
+
+          if (!json.length) {
+            statusEl.textContent = "데이터가 비어 있습니다. 시트를 확인해 주세요.";
+            return;
+          }
+
+          allRows = json;
+          colMap = detectColumns(json);
+
+          // 업로드된 파일에서 실제 사용된 LA코드 목록 계산
+          updateLaCodeList(allRows);
+
+          allMonths = extractMonths(allRows);
+          setupMonthRange(allMonths);
+
+          recalc(); // 기본 범위로 1회 계산
+
+          statusEl.textContent =
+            `행 개수: ${json.length.toLocaleString()}건 / 월: ${allMonths.length ? allMonths.join(", ") : "알 수 없음"} | ` +
+            `코드: ${colMap.code || "-"}, 유형: ${colMap.type || "-"}, 환자번호: ${colMap.chart || "-"}, ` +
+            `일자: ${colMap.date || "-"}, 주민/생년: ${colMap.rrn || "-"}`;
+        } catch (err) {
+          console.error(err);
+          statusEl.textContent = "엑셀을 읽는 중 오류가 발생했습니다. 형식을 확인해 주세요.";
+        }
+      };
+
+      reader.readAsBinaryString(file);
+    }
+
+    // ========== 업로드된 파일의 LA코드 목록 표시 ==========
+    function updateLaCodeList(rows) {
+      const set = new Set();
+
+      for (const r of rows) {
+        const rawCode = colMap.code ? r[colMap.code] : null;
+        const code = normalizeCode(rawCode);
+        if (!code) continue;
+        if (isLACode(code)) {
+          set.add(code);
+        }
+      }
+
+      const list = Array.from(set).sort((a,b) => a.localeCompare(b, "ko", {numeric:true}));
+      laCodeListEl.textContent = list.length ? list.join(", ") : "-";
+    }
+
+    // ========== 컬럼 자동 인식 ==========
+    function detectColumns(rows) {
+      const first = rows[0] || {};
+      const keys = Object.keys(first);
+      const map = {
+        code: null,
+        type: null,
+        chart: null,
+        date: null,
+        rrn: null,
+        totalDose: null,
+        dose: null,
+        days: null
+      };
+
+      keys.forEach(k => {
+        const lk = k.toLowerCase();
+
+        // 코드
+        if (!map.code && (lk.includes("코드") || lk.includes("la"))) {
+          map.code = k;
+        }
+
+        // 보험유형
+        if (!map.type && (lk.includes("유형") || lk.includes("보험") || lk.includes("급여"))) {
+          map.type = k;
+        }
+
+        // 차트번호 / 환자번호
+        if (!map.chart && (lk.includes("차트") || lk.includes("환자번호") ||
+                           lk.includes("등록번호") || lk.includes("환자"))) {
+          map.chart = k;
+        }
+
+        // 일자/날짜
+        if (!map.date && (lk.includes("일자") || lk.includes("날짜"))) {
+          map.date = k;
+        }
+
+        // 주민번호 / 생년월일
+        if (!map.rrn && (lk.includes("주민") || lk.includes("생년"))) {
+          map.rrn = k;
+        }
+
+        // 총투여량
+        if (!map.totalDose && (lk.includes("총투") || lk.includes("총 투여") ||
+                               lk.includes("총량") || lk.includes("합계"))) {
+          map.totalDose = k;
+        }
+
+        // 1회투여량
+        if (!map.dose && (lk.includes("1회") || (lk.includes("투여") && !lk.includes("총")))) {
+          map.dose = k;
+        }
+
+        // 투여일수
+        if (!map.days && lk.includes("일수")) {
+          map.days = k;
+        }
+      });
+
+      // 기본값(혹시 못 잡았을 때)
+      map.code      = map.code      || "처방코드";
+      map.type      = map.type      || "유형";
+      map.chart     = map.chart     || "차트번호";
+      map.date      = map.date      || "처방일자";
+      map.rrn       = map.rrn       || "주민번호";
+      map.totalDose = map.totalDose || "총투여량";
+
+      return map;
+    }
+
+    // ========== 월 리스트/범위 설정 ==========
+    function extractMonths(rows) {
+      const set = new Set();
+      for (const r of rows) {
+        const date = parseDate(colMap.date ? r[colMap.date] : null);
+        if (!date) continue;
+        const ym = `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,"0")}`;
+        set.add(ym);
+      }
+      return Array.from(set).sort();
+    }
+
+    function setupMonthRange(months) {
+      monthStartSelect.innerHTML = "";
+      monthEndSelect.innerHTML = "";
+
+      if (!months.length) {
+        const o1 = document.createElement("option");
+        o1.value = "all";
+        o1.textContent = "전체";
+        monthStartSelect.appendChild(o1);
+
+        const o2 = document.createElement("option");
+        o2.value = "all";
+        o2.textContent = "전체";
+        monthEndSelect.appendChild(o2);
+
+        monthStartSelect.disabled = true;
+        monthEndSelect.disabled = true;
+        return;
+      }
+
+      const addOptions = (select) => {
+        const optAll = document.createElement("option");
+        optAll.value = "all";
+        optAll.textContent = "전체";
+        select.appendChild(optAll);
+
+        months.forEach(m => {
+          const o = document.createElement("option");
+          o.value = m;
+          o.textContent = m;
+          select.appendChild(o);
+        });
+      };
+
+      addOptions(monthStartSelect);
+      addOptions(monthEndSelect);
+
+      monthStartSelect.disabled = false;
+      monthEndSelect.disabled = false;
+
+      monthStartSelect.value = months[0];
+      monthEndSelect.value = months[months.length - 1];
+    }
+
+    // ========== 재계산 메인 ==========
+    function recalc() {
+      if (!allRows.length) return;
+
+      const startKey = monthStartSelect.value || "all";
+      const endKey   = monthEndSelect.value   || "all";
+
+      const monthsSorted = [...allMonths].sort();
+      const minMonth = monthsSorted[0];
+      const maxMonth = monthsSorted[monthsSorted.length - 1];
+
+      const realStart = (startKey === "all" || !startKey) ? minMonth : startKey;
+      const realEnd   = (endKey   === "all" || !endKey)   ? maxMonth : endKey;
+
+      const useMonthFilter = Boolean(realStart && realEnd);
+
+      // 1) LA 코드 + 월 범위 필터
+      const filtered = allRows.filter(row => {
+        const codeVal = colMap.code ? row[colMap.code] : null;
+        const code = normalizeCode(codeVal);
+        if (!code || !isLACode(code)) return false;
+
+        const dateVal = colMap.date ? row[colMap.date] : null;
+        const date = parseDate(dateVal);
+        if (!date || !useMonthFilter) return true;
+
+        const ym = `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,"0")}`;
+        if (ym < realStart || ym > realEnd) return false;
+
+        return true;
+      });
+
+      if (!filtered.length) {
+        tableSummaryWrapper.innerHTML = "<div class='hint'>선택한 기간에 해당하는 신경차단술(LA코드) 처방이 없습니다.</div>";
+        tableAgeWrapper.innerHTML = "";
+        return;
+      }
+
+      // 2) 통계 계산
+      const stats = calcStats(filtered);
+
+      // 3) 테이블 렌더링
+      renderSummaryTable(stats, realStart || "전체", realEnd || "전체");
+      renderAgeTable(stats);
+    }
+
+    // ========== 실제 통계 계산 ==========
+    function calcStats(rows) {
+      const byType = {};
+
+      function ensureType(type) {
+        if (!byType[type]) {
+          byType[type] = {
+            type,
+            visitKeys: new Set(),
+            patientKeys: new Set(),
+            totalDose: 0,
+            ageGroups: {
+              "65+": { visitKeys: new Set(), totalDose: 0 },
+              "<65": { visitKeys: new Set(), totalDose: 0 }
+            }
+          };
+        }
+        return byType[type];
+      }
+
+      for (const r of rows) {
+        const typeRaw = (colMap.type ? r[colMap.type] : (r["유형"] || r["보험유형"] || "")).toString().trim();
+        const type = typeRaw || "기타";
+        const stat = ensureType(type);
+
+        const chart = (colMap.chart ? r[colMap.chart] : (r["차트번호"] || r["등록번호"] || "")).toString().trim();
+        const dateVal = colMap.date ? r[colMap.date] : (r["처방일자"] || r["진료일자"]);
+        const date = parseDate(dateVal);
+
+        const visitKey = chart && date
+          ? `${chart}|${date.getFullYear()}-${date.getMonth()+1}-${date.getDate()}`
+          : `${chart}|${dateVal || ""}`;
+
+        const totalDoseVal = colMap.totalDose ? r[colMap.totalDose] : r["총투여량"];
+        const doseVal      = colMap.dose      ? r[colMap.dose]      : r["투여량"];
+        const daysVal      = colMap.days      ? r[colMap.days]      : r["투여일수"];
+
+        let dose =
+          toNumber(totalDoseVal) ||
+          (toNumber(doseVal) * (toNumber(daysVal) || 1)) ||
+          0;
+
+        if (chart) stat.patientKeys.add(chart);
+        if (visitKey) stat.visitKeys.add(visitKey);
+        stat.totalDose += dose;
+
+        const rrnRaw = colMap.rrn ? r[colMap.rrn] : (r["주민번호"] || r["생년월일"] || "");
+        const rrn = (rrnRaw || "").toString();
+        const birthDate = parseBirthDate(rrn);
+        const age = (birthDate && date) ? calcAge(birthDate, date) : null;
+
+        if (age !== null) {
+          const groupKey = age >= 65 ? "65+" : "<65";
+          const g = stat.ageGroups[groupKey];
+          if (visitKey) g.visitKeys.add(visitKey);
+          g.totalDose += dose;
+        }
+      }
+
+      const result = {};
+
+      Object.keys(byType).forEach(type => {
+        result[type] = finalizeTypeStat(byType[type]);
+      });
+
+      // 총합계
+      const total = {
+        type: "총합계",
+        visitCount: 0,
+        patientCount: 0,
+        totalDose: 0,
+        perVisit: 0,
+        perPatient: 0,
+        avgInjection: 0,
+        ageGroups: {
+          "65+": { visitCount: 0, totalDose: 0 },
+          "<65": { visitCount: 0, totalDose: 0 }
+        }
+      };
+
+      for (const t of Object.keys(result)) {
+        const s = result[t];
+        total.visitCount += s.visitCount;
+        total.patientCount += s.patientCount;
+        total.totalDose += s.totalDose;
+        for (const g of ["65+","<65"]) {
+          total.ageGroups[g].visitCount += s.ageGroups[g].visitCount;
+          total.ageGroups[g].totalDose += s.ageGroups[g].totalDose;
+        }
+      }
+
+      total.perVisit = total.visitCount ? total.totalDose / total.visitCount : 0;
+      total.perPatient = total.patientCount ? total.totalDose / total.patientCount : 0;
+      total.avgInjection = total.patientCount ? total.visitCount / total.patientCount : 0;
+
+      result["총합계"] = total;
+
+      // 건보+보호
+      const gbpTypes = ["국민건강보험","보호1종","보호2종"];
+      const gbp = {
+        type: "건보+보호",
+        visitCount: 0,
+        patientCount: 0,
+        totalDose: 0,
+        perVisit: 0,
+        perPatient: 0,
+        avgInjection: 0,
+        ageGroups: {
+          "65+": { visitCount: 0, totalDose: 0 },
+          "<65": { visitCount: 0, totalDose: 0 }
+        }
+      };
+
+      for (const t of gbpTypes) {
+        const s = result[t];
+        if (!s) continue;
+        gbp.visitCount += s.visitCount;
+        gbp.patientCount += s.patientCount;
+        gbp.totalDose += s.totalDose;
+        for (const g of ["65+","<65"]) {
+          gbp.ageGroups[g].visitCount += s.ageGroups[g].visitCount;
+          gbp.ageGroups[g].totalDose += s.ageGroups[g].totalDose;
+        }
+      }
+
+      gbp.perVisit = gbp.visitCount ? gbp.totalDose / gbp.visitCount : 0;
+      gbp.perPatient = gbp.patientCount ? gbp.totalDose / gbp.patientCount : 0;
+      gbp.avgInjection = gbp.patientCount ? gbp.visitCount / gbp.patientCount : 0;
+      result["건보+보호"] = gbp;
+
+      return result;
+    }
+
+    function finalizeTypeStat(stat) {
+      const visitCount = stat.visitKeys.size;
+      const patientCount = stat.patientKeys.size;
+
+      const perVisit = visitCount ? stat.totalDose / visitCount : 0;
+      const perPatient = patientCount ? stat.totalDose / patientCount : 0;
+      const avgInjection = patientCount ? visitCount / patientCount : 0;
+
+      const ag = {};
+      for (const k of ["65+","<65"]) {
+        const g = stat.ageGroups[k];
+        ag[k] = {
+          visitCount: g.visitKeys.size,
+          totalDose: g.totalDose
+        };
+      }
+
+      return {
+        type: stat.type,
+        visitCount,
+        patientCount,
+        totalDose: stat.totalDose,
+        perVisit,
+        perPatient,
+        avgInjection,
+        ageGroups: ag
+      };
+    }
+
+    // ========== 요약 테이블 렌더링 ==========
+    function renderSummaryTable(stats, startYm, endYm) {
+      const rows = [];
+      for (const type of TYPE_ORDER) {
+        if (!stats[type]) continue;
+        rows.push(stats[type]);
+      }
+
+      let periodLabel;
+      if (!startYm || !endYm || startYm === "전체" || endYm === "전체") {
+        periodLabel = "신경차단술 (전체 기간)";
+      } else if (startYm === endYm) {
+        periodLabel = `${startYm} 신경차단술`;
+      } else {
+        periodLabel = `${startYm} ~ ${endYm} 신경차단술`;
+      }
+
+      let html = "<table>";
+      html += "<thead><tr>";
+      html += `<th>${periodLabel}</th>`;
+      html += "<th>주사 환자수<br/>(방문수)</th>";
+      html += "<th>주사 총투</th>";
+      html += "<th>건당 횟수</th>";
+      html += "<th>환자수</th>";
+      html += "<th>수진자당 횟수</th>";
+      html += "<th>평균주사<br/>(방문/환자)</th>";
+      html += "</tr></thead><tbody>";
+
+      for (const r of rows) {
+        const isTotal = r.type === "총합계";
+        const isGB = r.type === "건보+보호";
+
+        html += `<tr class="${isTotal || isGB ? "highlight" : ""}">`;
+        html += `<td>${r.type}</td>`;
+        html += `<td>${formatInt(r.visitCount)}</td>`;
+        html += `<td>${formatNumber(r.totalDose)}</td>`;
+        html += `<td class="num-red">${formatNumber(r.perVisit)}</td>`;
+        html += `<td>${formatInt(r.patientCount)}</td>`;
+        html += `<td class="num-red">${formatNumber(r.perPatient)}</td>`;
+        html += `<td>${formatNumber(r.avgInjection)}</td>`;
+        html += "</tr>";
+      }
+
+      html += "</tbody></table>";
+      tableSummaryWrapper.innerHTML = html;
+    }
+
+    // ========== 연령대 테이블 렌더링 ==========
+    function renderAgeTable(stats) {
+      const targetTypes = ["국민건강보험","보호1종","보호2종","일반","자보-청구분"];
+
+      let html = "<table>";
+      html += "<thead><tr>";
+      html += "<th>신경차단술 / 유형</th>";
+      html += "<th>65세이상 비율</th>";
+      html += "<th>65세미만 비율</th>";
+      html += "<th>65세이상 건당 횟수</th>";
+      html += "<th>65세미만 건당 횟수</th>";
+      html += "</tr></thead><tbody>";
+
+      for (const type of targetTypes) {
+        const s = stats[type];
+        if (!s) continue;
+
+        const g65 = s.ageGroups["65+"] || { visitCount: 0, totalDose: 0 };
+        const gU  = s.ageGroups["<65"] || { visitCount: 0, totalDose: 0 };
+
+        const totalVisit = g65.visitCount + gU.visitCount;
+
+        const pct65 = totalVisit ? (g65.visitCount / totalVisit * 100) : 0;
+        const pctU  = totalVisit ? (gU.visitCount  / totalVisit * 100) : 0;
+
+        const perVisit65 = g65.visitCount ? g65.totalDose / g65.visitCount : 0;
+        const perVisitU  = gU.visitCount  ? gU.totalDose  / gU.visitCount  : 0;
+
+        html += "<tr>";
+        html += `<td>${type}</td>`;
+        html += `<td>${pct65.toFixed(2)}%</td>`;
+        html += `<td>${pctU.toFixed(2)}%</td>`;
+        html += `<td>${formatNumber(perVisit65)}</td>`;
+        html += `<td>${formatNumber(perVisitU)}</td>`;
+        html += "</tr>";
+      }
+
+      html += "</tbody></table>";
+      tableAgeWrapper.innerHTML = html;
+    }
+
+    // ========== 유틸 ==========
+    function normalizeCode(code) {
+      if (!code) return "";
+      return code.toString().trim().toUpperCase();
+    }
+
+    // LA200 ~ LA400 여부 판단
+    function isLACode(code) {
+      const c = normalizeCode(code);
+      if (!c.startsWith("LA")) return false;
+
+      // 'LA35900' 같은 경우 숫자 부분에서 앞 3자리만 사용
+      const match = c.slice(2).match(/\d+/);
+      if (!match) return false;
+
+      const num3 = match[0].slice(0,3);   // "35900" -> "359"
+      const n = parseInt(num3, 10);
+      if (isNaN(n)) return false;
+
+      return n >= LA_MIN && n <= LA_MAX;
+    }
+
+    function toNumber(val) {
+      if (val === null || val === undefined || val === "") return 0;
+      if (typeof val === "number") return val;
+      const s = val.toString().replace(/,/g,"").trim();
+      const n = parseFloat(s);
+      return isNaN(n) ? 0 : n;
+    }
+
+    // 날짜 인식 (여러 형식 대응)
+    function parseDate(v) {
+      if (!v && v !== 0) return null;
+
+      if (v instanceof Date) return v;
+
+      if (typeof v === "number") {
+        const utc_days  = Math.floor(v - 25569);
+        const utc_value = utc_days * 86400;
+        const date_info = new Date(utc_value * 1000);
+        return new Date(date_info.getFullYear(), date_info.getMonth(), date_info.getDate());
+      }
+
+      let s = v.toString().trim();
+      if (!s) return null;
+
+      if (s.includes(" ")) {
+        s = s.split(" ")[0];
+      }
+
+      let m = s.replace(/\./g,"-").replace(/\//g,"-")
+               .match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+      if (m) {
+        return new Date(Number(m[1]), Number(m[2])-1, Number(m[3]));
+      }
+
+      m = s.match(/^(\d{4})(\d{2})(\d{2})$/);
+      if (m) {
+        return new Date(Number(m[1]), Number(m[2])-1, Number(m[3]));
+      }
+
+      m = s.replace(/\./g,"-").replace(/\//g,"-")
+           .match(/^(\d{2})-(\d{1,2})-(\d{1,2})$/);
+      if (m) {
+        const yy = Number(m[1]);
+        const year = yy >= 50 ? 1900 + yy : 2000 + yy;
+        return new Date(year, Number(m[2])-1, Number(m[3]));
+      }
+
+      const d = new Date(s.replace(/\./g,"-").replace(/\//g,"-"));
+      if (!isNaN(d.getTime())) {
+        return new Date(d.getFullYear(), d.getMonth(), d.getDate());
+      }
+
+      return null;
+    }
+
+    function parseBirthDate(rrn) {
+      if (!rrn) return null;
+      const s = rrn.toString().replace(/[^0-9]/g,"");
+      if (s.length < 7) return null;
+
+      const yy = Number(s.slice(0,2));
+      const mm = Number(s.slice(2,4));
+      const dd = Number(s.slice(4,6));
+      const code = Number(s.charAt(6));
+
+      let century;
+      if ([1,2,5,6].includes(code)) century = 1900;
+      else if ([3,4,7,8].includes(code)) century = 2000;
+      else century = 1900;
+
+      const year = century + yy;
+      if (!year || !mm || !dd) return null;
+
+      return new Date(year, mm-1, dd);
+    }
+
+    function calcAge(birth, ref) {
+      if (!birth || !ref) return null;
+      let age = ref.getFullYear() - birth.getFullYear();
+      const m = ref.getMonth() - birth.getMonth();
+      if (m < 0 || (m === 0 && ref.getDate() < birth.getDate())) {
+        age--;
+      }
+      return age;
+    }
+
+    function formatNumber(n) {
+      if (!isFinite(n)) return "0.00";
+      return n.toFixed(2);
+    }
+
+    function formatInt(n) {
+      if (!n) return "0";
+      return Number(n).toLocaleString();
+    }
+  </script>
+</body>
+</html>
