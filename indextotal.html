@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <title>통계 대시보드 선택 – 비트 / 의사랑</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <style>
+    :root {
+      --bg: #020617;
+      --card: #020617;
+      --accent: #22d3ee;
+      --accent-soft: rgba(34, 211, 238, 0.12);
+      --text: #e5e7eb;
+      --muted: #9ca3af;
+      --border: #1f2937;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      padding: 32px 16px 40px;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
+        Roboto, "Noto Sans KR", sans-serif;
+      background: radial-gradient(circle at top, #0b1120 0, #000 55%);
+      color: var(--text);
+    }
+
+    .page {
+      max-width: 1080px;
+      margin: 0 auto;
+    }
+
+    h1 {
+      margin: 0 0 6px;
+      font-size: 26px;
+      font-weight: 700;
+      letter-spacing: -0.03em;
+    }
+
+    .subtitle {
+      margin: 0 0 20px;
+      font-size: 13px;
+      color: var(--muted);
+      line-height: 1.5;
+    }
+
+    .badge-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-bottom: 16px;
+      font-size: 11px;
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 9px;
+      border-radius: 999px;
+      background: var(--accent-soft);
+      color: var(--accent);
+      border: 1px solid rgba(34, 211, 238, 0.4);
+    }
+
+    .badge-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: var(--accent);
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 18px;
+      margin-top: 12px;
+    }
+
+    @media (max-width: 720px) {
+      .grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .card-link {
+      text-decoration: none;
+      color: inherit;
+    }
+
+    .card {
+      position: relative;
+      border-radius: 18px;
+      padding: 18px 18px 16px;
+      background: radial-gradient(circle at top left, #0b1120 0, #020617 55%);
+      border: 1px solid rgba(148, 163, 184, 0.4);
+      box-shadow: 0 18px 40px rgba(0, 0, 0, 0.7);
+      transition: transform 0.14s ease, box-shadow 0.14s ease,
+        border-color 0.14s ease, background 0.14s ease;
+      overflow: hidden;
+    }
+
+    .card:hover {
+      transform: translateY(-4px);
+      border-color: var(--accent);
+      box-shadow: 0 24px 55px rgba(15, 23, 42, 0.95);
+      background: radial-gradient(circle at top left, #0f172a 0, #020617 60%);
+    }
+
+    .card-title {
+      font-size: 18px;
+      font-weight: 700;
+      margin-bottom: 4px;
+      letter-spacing: -0.02em;
+    }
+
+    .card-label {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 11px;
+      color: var(--muted);
+      margin-bottom: 8px;
+    }
+
+    .pill {
+      padding: 2px 8px;
+      border-radius: 999px;
+      border: 1px solid rgba(148, 163, 184, 0.6);
+      background: rgba(15, 23, 42, 0.9);
+      font-size: 10px;
+      color: var(--muted);
+    }
+
+    .card-desc {
+      font-size: 12px;
+      color: var(--muted);
+      line-height: 1.5;
+      margin-bottom: 10px;
+    }
+
+    .card-meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      font-size: 11px;
+      color: var(--muted);
+    }
+
+    .arrow {
+      position: absolute;
+      right: 14px;
+      bottom: 12px;
+      font-size: 18px;
+      color: var(--accent);
+      opacity: 0.85;
+      transition: transform 0.15s ease;
+    }
+
+    .card:hover .arrow {
+      transform: translateX(3px);
+    }
+
+    footer {
+      margin-top: 26px;
+      font-size: 11px;
+      color: var(--muted);
+      border-top: 1px solid rgba(15, 23, 42, 0.9);
+      padding-top: 10px;
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <header>
+      <div class="badge-row">
+        <div class="badge">
+          <span class="badge-dot"></span>
+          신경차단술 · 통합 통계 도구
+        </div>
+      </div>
+      <h1>통계 대시보드 선택</h1>
+      <p class="subtitle">
+        사용하실 프로그램에 맞는 대시보드를 선택해 주세요.<br />
+        같은 컨셉의 화면에서 <b>비트(환자별 소모통계)</b>와
+        <b>의사랑 통계</b>를 각각 별도로 분석할 수 있습니다.
+      </p>
+    </header>
+
+    <main class="grid">
+      <!-- 비트 통계계산 -->
+      <a href="index1.html" class="card-link">
+        <article class="card">
+          <div class="card-label">
+            <span class="pill">비트 / 환자별 소모통계</span>
+            <span>엑셀 업로드 자동 계산</span>
+          </div>
+          <h2 class="card-title">비트 통계계산</h2>
+          <p class="card-desc">
+            비트 <b>환자별 소모통계</b> 엑셀 파일을 업로드하면<br />
+            보험유형별 · 65세 이상/미만 기준으로<br />
+            <b>신경차단술 수신자당·건당 횟수</b>를 자동 계산합니다.
+          </p>
+          <div class="card-meta">
+            <span>· 국민건강보험 / 의료급여 / 자보 구분</span>
+            <span>· 수신자당 / 건당 / 평균 주사 횟수</span>
+          </div>
+          <div class="arrow">➜</div>
+        </article>
+      </a>
+
+      <!-- 의사랑 통계계산 -->
+      <a href="index2.html" class="card-link">
+        <article class="card">
+          <div class="card-label">
+            <span class="pill">의사랑</span>
+            <span>의사랑 통계용 버전</span>
+          </div>
+          <h2 class="card-title">의사랑 통계계산</h2>
+          <p class="card-desc">
+            의사랑에서 추출한 통계 데이터를 기반으로<br />
+            동일한 기준(보험유형 · 연령 등)으로<br />
+            <b>신경차단술 통계를 별도로 조회</b>합니다.
+          </p>
+          <div class="card-meta">
+            <span>· 의사랑 포맷에 맞는 컬럼 자동 인식</span>
+            <span>· 비트 계산 결과와 비교 분석용</span>
+          </div>
+          <div class="arrow">➜</div>
+        </article>
+      </a>
+    </main>
+
+    <footer>
+      ※ `index1.html` · `index2.html` 파일은 같은 폴더에 두고 사용하시면 됩니다.
+      필요하시면 상단 문구나 설명은 자유롭게 수정하셔도 됩니다.
+    </footer>
+  </div>
+</body>
+</html>
