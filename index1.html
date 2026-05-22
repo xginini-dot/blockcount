@@ -271,10 +271,10 @@
     <div class="section-title" style="margin-top:18px;">② 65세 이상 / 65세 미만 비율 및 건당 횟수</div>
     <div id="tableAgeWrapper"></div>
 
-    <div class="section-title" style="margin-top:18px;">③ LA코드 조합 통계</div>
+    <div class="section-title" style="margin-top:18px;">③ LA코드 단독/조합 통계</div>
     <div class="hint">
-      동일 환자(차트번호)·동일 날짜 기준으로 2개 이상의 서로 다른 LA코드가 같이 처방된 경우를 조합으로 집계합니다.<br/>
-      예) 같은 날짜에 동일 환자에게 <code>LA358</code>, <code>LA272</code>가 있으면 <code>LA272 + LA358</code> 1건으로 계산합니다.
+      동일 환자(차트번호)·동일 날짜 기준으로 들어간 LA코드를 묶어 집계합니다.<br/>
+      예) 같은 날짜에 <code>LA358</code>만 있으면 <code>LA358</code> 1건, <code>LA358</code>, <code>LA272</code>가 같이 있으면 <code>LA272 + LA358</code> 1건으로 계산합니다.
     </div>
     <div id="tableComboWrapper"></div>
   </div>
@@ -840,7 +840,7 @@
     }
 
 
-    // ========== LA코드 조합 통계 계산 ==========
+    // ========== LA코드 단독/조합 통계 계산 ==========
     function calcComboStats(rows) {
       const visitMap = new Map();
 
@@ -871,23 +871,25 @@
 
       const comboMap = new Map();
       let totalVisits = 0;
-      let comboVisits = 0;
+      let singleVisits = 0;
+      let multiVisits = 0;
 
       for (const v of visitMap.values()) {
-        totalVisits += 1;
-
         const codes = Array.from(v.codes).sort((a,b) => a.localeCompare(b, "ko", {numeric:true}));
+        if (!codes.length) continue;
 
-        // 조합 통계는 2개 이상의 서로 다른 LA코드가 같은 날 들어간 경우만 집계
-        if (codes.length < 2) continue;
+        totalVisits += 1;
+        if (codes.length === 1) singleVisits += 1;
+        if (codes.length >= 2) multiVisits += 1;
 
-        comboVisits += 1;
+        // 단독 LA코드도 포함: LA358 단독이면 "LA358", 복합이면 "LA272 + LA358"
         const comboKey = codes.join(" + ");
 
         if (!comboMap.has(comboKey)) {
           comboMap.set(comboKey, {
             combo: comboKey,
-            count: 0
+            count: 0,
+            codeCount: codes.length
           });
         }
 
@@ -897,55 +899,69 @@
       const rowsOut = Array.from(comboMap.values())
         .sort((a,b) => {
           if (b.count !== a.count) return b.count - a.count;
+          if (a.codeCount !== b.codeCount) return a.codeCount - b.codeCount;
           return a.combo.localeCompare(b.combo, "ko", {numeric:true});
         })
         .map((r, idx) => ({
           rank: idx + 1,
           combo: r.combo,
           count: r.count,
-          pctOfAllVisits: totalVisits ? (r.count / totalVisits * 100) : 0,
-          pctOfComboVisits: comboVisits ? (r.count / comboVisits * 100) : 0
+          codeCount: r.codeCount,
+          typeLabel: r.codeCount === 1 ? "단독" : "조합",
+          pctOfAllVisits: totalVisits ? (r.count / totalVisits * 100) : 0
         }));
 
       return {
         totalVisits,
-        comboVisits,
+        singleVisits,
+        multiVisits,
         rows: rowsOut
       };
     }
 
-    // ========== LA코드 조합 테이블 렌더링 ==========
+    // ========== LA코드 단독/조합 테이블 렌더링 ==========
     function renderComboTable(comboStats) {
       if (!comboStats || !comboStats.rows.length) {
         tableComboWrapper.innerHTML =
-          "<div class='hint'>선택한 기간에는 동일 환자·동일 날짜 기준 2개 이상 LA코드 조합 처방이 없습니다.</div>";
+          "<div class='hint'>선택한 기간에는 동일 환자·동일 날짜 기준 LA코드 처방이 없습니다.</div>";
         return;
       }
 
       let html = "<table>";
       html += "<thead><tr>";
       html += "<th>순위</th>";
-      html += "<th>LA코드 조합</th>";
+      html += "<th>구분</th>";
+      html += "<th>LA코드 단독/조합</th>";
       html += "<th>건수</th>";
       html += "<th>전체 LA 방문 대비</th>";
-      html += "<th>조합 방문 내 비율</th>";
       html += "</tr></thead><tbody>";
 
       comboStats.rows.forEach(r => {
         html += "<tr>";
         html += `<td>${r.rank}</td>`;
+        html += `<td>${r.typeLabel}</td>`;
         html += `<td>${r.combo}</td>`;
         html += `<td>${formatInt(r.count)}</td>`;
-        html += `<td>${r.pctOfAllVisits.toFixed(2)}%</td>`;
-        html += `<td class="num-red">${r.pctOfComboVisits.toFixed(2)}%</td>`;
+        html += `<td class="num-red">${r.pctOfAllVisits.toFixed(2)}%</td>`;
         html += "</tr>";
       });
 
       html += "<tr class='highlight'>";
-      html += "<td colspan='2'>조합 방문 합계</td>";
-      html += `<td>${formatInt(comboStats.comboVisits)}</td>`;
-      html += `<td>${comboStats.totalVisits ? (comboStats.comboVisits / comboStats.totalVisits * 100).toFixed(2) : "0.00"}%</td>`;
+      html += "<td colspan='3'>전체 LA 방문 합계</td>";
+      html += `<td>${formatInt(comboStats.totalVisits)}</td>`;
       html += "<td>100.00%</td>";
+      html += "</tr>";
+
+      html += "<tr class='highlight'>";
+      html += "<td colspan='3'>단독 LA 방문 합계</td>";
+      html += `<td>${formatInt(comboStats.singleVisits)}</td>`;
+      html += `<td>${comboStats.totalVisits ? (comboStats.singleVisits / comboStats.totalVisits * 100).toFixed(2) : "0.00"}%</td>`;
+      html += "</tr>";
+
+      html += "<tr class='highlight'>";
+      html += "<td colspan='3'>2개 이상 조합 LA 방문 합계</td>";
+      html += `<td>${formatInt(comboStats.multiVisits)}</td>`;
+      html += `<td>${comboStats.totalVisits ? (comboStats.multiVisits / comboStats.totalVisits * 100).toFixed(2) : "0.00"}%</td>`;
       html += "</tr>";
 
       html += "</tbody></table>";
@@ -1075,29 +1091,31 @@
       const wsAge = XLSX.utils.aoa_to_sheet(sheetAge);
       XLSX.utils.book_append_sheet(wb, wsAge, "연령별");
 
-      // ③ LA코드 조합 시트
+      // ③ LA코드 단독/조합 시트
       const sheetCombo = [];
       sheetCombo.push([periodLabel]);
       sheetCombo.push([]);
       sheetCombo.push(["전체 LA 방문수", comboStats.totalVisits]);
-      sheetCombo.push(["2개 이상 LA코드 조합 방문수", comboStats.comboVisits]);
-      sheetCombo.push(["조합 방문 비율(%)", round2(comboStats.totalVisits ? comboStats.comboVisits / comboStats.totalVisits * 100 : 0)]);
+      sheetCombo.push(["단독 LA 방문수", comboStats.singleVisits]);
+      sheetCombo.push(["2개 이상 조합 LA 방문수", comboStats.multiVisits]);
+      sheetCombo.push(["단독 LA 방문 비율(%)", round2(comboStats.totalVisits ? comboStats.singleVisits / comboStats.totalVisits * 100 : 0)]);
+      sheetCombo.push(["2개 이상 조합 LA 방문 비율(%)", round2(comboStats.totalVisits ? comboStats.multiVisits / comboStats.totalVisits * 100 : 0)]);
       sheetCombo.push([]);
       sheetCombo.push([
         "순위",
-        "LA코드 조합",
+        "구분",
+        "LA코드 단독/조합",
         "건수",
-        "전체 LA 방문 대비(%)",
-        "조합 방문 내 비율(%)"
+        "전체 LA 방문 대비(%)"
       ]);
 
       comboStats.rows.forEach(r => {
         sheetCombo.push([
           r.rank,
+          r.typeLabel,
           r.combo,
           r.count,
-          round2(r.pctOfAllVisits),
-          round2(r.pctOfComboVisits)
+          round2(r.pctOfAllVisits)
         ]);
       });
 
