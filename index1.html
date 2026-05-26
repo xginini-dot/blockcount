@@ -195,6 +195,28 @@
       border-color: var(--accent);
     }
 
+    .detail-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 360px;
+      gap: 14px;
+      align-items: start;
+      margin-top: 10px;
+    }
+
+    .mini-card {
+      border: 1px solid var(--table-border);
+      border-radius: 14px;
+      padding: 12px;
+      background: rgba(2, 6, 23, 0.55);
+      overflow-x: auto;
+    }
+
+    .hidden { display: none; }
+
+    @media (max-width: 980px) {
+      .detail-grid { grid-template-columns: 1fr; }
+    }
+
     @media (max-width: 720px) {
       body { padding: 16px; }
       .card { padding: 14px 12px; }
@@ -277,6 +299,27 @@
       예) 같은 날짜에 <code>LA358</code>만 있으면 <code>LA358</code> 1건, <code>LA358</code>, <code>LA272</code>가 같이 있으면 <code>LA272 + LA358</code> 1건으로 계산합니다.
     </div>
     <div id="tableComboWrapper"></div>
+
+    <div class="flex-between" style="margin-top:18px;">
+      <div>
+        <div class="section-title">④ 추가정보 보기</div>
+        <div class="hint">
+          환자 1명·동일 날짜 기준으로 <b>LA코드별 총투여량까지 포함한 조합</b>을 집계합니다.<br/>
+          예) <code>LA247 1.5 + LA357 1.5 = 3.0</code> 기준으로 해당조합 금액, 조합건수, 조합비율, 전체조합비용을 계산합니다.
+        </div>
+      </div>
+      <button type="button" id="btn-toggle-extra" style="border-radius:999px;border:1px solid var(--accent-border);background:var(--accent-soft);color:#fed7aa;font-size:11px;padding:6px 14px;cursor:pointer;">추가정보 보기</button>
+    </div>
+    <div id="extraInfoArea" class="detail-grid hidden">
+      <div class="mini-card">
+        <div class="section-title">조합별 투여량·금액 상세</div>
+        <div id="tableComboDoseWrapper"></div>
+      </div>
+      <div class="mini-card">
+        <div class="section-title">LA코드별 단가 리스트</div>
+        <div id="tableUnitPriceWrapper"></div>
+      </div>
+    </div>
   </div>
 
   <script>
@@ -300,6 +343,10 @@
     const tableSummaryWrapper = document.getElementById("tableSummaryWrapper");
     const tableAgeWrapper = document.getElementById("tableAgeWrapper");
     const tableComboWrapper = document.getElementById("tableComboWrapper");
+    const tableComboDoseWrapper = document.getElementById("tableComboDoseWrapper");
+    const tableUnitPriceWrapper = document.getElementById("tableUnitPriceWrapper");
+    const extraInfoArea = document.getElementById("extraInfoArea");
+    const btnToggleExtra = document.getElementById("btn-toggle-extra");
     const fileInput = document.getElementById("file");
     const monthStartSelect = document.getElementById("monthStart");
     const monthEndSelect = document.getElementById("monthEnd");
@@ -321,7 +368,10 @@
       rrn: null,        // 주민번호/생년월일
       totalDose: null,  // 총투여량
       dose: null,       // 1회투여량
-      days: null        // 투여일수
+      days: null,       // 투여일수
+      name: null,       // 처방명칭
+      unitPrice: null,  // 단가
+      amount: null      // 금액
     };
 
     // ===== 이벤트 바인딩 =====
@@ -340,6 +390,11 @@
 
     btnResetAll.addEventListener("click", handleResetAll);
     btnExportExcel.addEventListener("click", exportToExcel);
+
+    btnToggleExtra.addEventListener("click", () => {
+      const isHidden = extraInfoArea.classList.toggle("hidden");
+      btnToggleExtra.textContent = isHidden ? "추가정보 보기" : "추가정보 닫기";
+    });
 
     // ========== 기간 라벨 공통 함수 ==========
     function getPeriodLabel(startYm, endYm) {
@@ -431,7 +486,10 @@
         rrn: null,
         totalDose: null,
         dose: null,
-        days: null
+        days: null,
+        name: null,
+        unitPrice: null,
+        amount: null
       };
 
       keys.forEach(k => {
@@ -478,6 +536,21 @@
         if (!map.days && lk.includes("일수")) {
           map.days = k;
         }
+
+        // 처방명칭
+        if (!map.name && (lk.includes("명칭") || lk.includes("처방명") || lk.includes("수가명") || lk.includes("명"))) {
+          map.name = k;
+        }
+
+        // 단가
+        if (!map.unitPrice && lk.includes("단가")) {
+          map.unitPrice = k;
+        }
+
+        // 금액
+        if (!map.amount && (lk.includes("금액") || lk.includes("비용") || lk.includes("청구액"))) {
+          map.amount = k;
+        }
       });
 
       // 기본값(혹시 못 잡았을 때)
@@ -487,6 +560,9 @@
       map.date      = map.date      || "처방일자";
       map.rrn       = map.rrn       || "주민번호";
       map.totalDose = map.totalDose || "총투여량";
+      map.name      = map.name      || "처방명칭";
+      map.unitPrice = map.unitPrice || "단가";
+      map.amount    = map.amount    || "금액";
 
       return map;
     }
@@ -583,17 +659,23 @@
         tableSummaryWrapper.innerHTML = "<div class='hint'>선택한 기간에 해당하는 신경차단술(LA코드) 처방이 없습니다.</div>";
         tableAgeWrapper.innerHTML = "";
         tableComboWrapper.innerHTML = "";
+        tableComboDoseWrapper.innerHTML = "";
+        tableUnitPriceWrapper.innerHTML = "";
         return;
       }
 
       // 2) 통계 계산
       const stats = calcStats(filtered);
       const comboStats = calcComboStats(filtered);
+      const comboDoseStats = calcComboDoseStats(filtered);
+      const unitPriceStats = calcUnitPriceStats(filtered);
 
       // 3) 테이블 렌더링
       renderSummaryTable(stats, realStart || "전체", realEnd || "전체");
       renderAgeTable(stats);
       renderComboTable(comboStats);
+      renderComboDoseTable(comboDoseStats);
+      renderUnitPriceTable(unitPriceStats);
     }
 
     // ========== 실제 통계 계산 ==========
@@ -969,6 +1051,203 @@
     }
 
 
+
+
+    // ========== 추가정보: 투여량 포함 조합 통계 계산 ==========
+    function calcComboDoseStats(rows) {
+      const visitMap = new Map();
+
+      for (const r of rows) {
+        const code = normalizeLACode(colMap.code ? r[colMap.code] : null);
+        if (!code || !isLACode(code)) continue;
+
+        const chart = (colMap.chart ? r[colMap.chart] : (r["차트번호"] || r["등록번호"] || "")).toString().trim();
+        const dateVal = colMap.date ? r[colMap.date] : (r["처방일자"] || r["진료일자"]);
+        const date = parseDate(dateVal);
+        if (!chart || !date) continue;
+
+        const dateKey = `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,"0")}-${String(date.getDate()).padStart(2,"0")}`;
+        const visitKey = `${chart}|${dateKey}`;
+
+        if (!visitMap.has(visitKey)) {
+          visitMap.set(visitKey, { chart, dateKey, codeMap: new Map(), amount: 0 });
+        }
+
+        const v = visitMap.get(visitKey);
+        const totalDoseVal = colMap.totalDose ? r[colMap.totalDose] : r["총투여량"];
+        const doseVal      = colMap.dose      ? r[colMap.dose]      : r["투여량"];
+        const daysVal      = colMap.days      ? r[colMap.days]      : r["투여일수"];
+        const dose = toNumber(totalDoseVal) || (toNumber(doseVal) * (toNumber(daysVal) || 1)) || 0;
+        const unitPrice = toNumber(colMap.unitPrice ? r[colMap.unitPrice] : r["단가"]);
+        const amountRaw = toNumber(colMap.amount ? r[colMap.amount] : r["금액"]);
+        const amount = amountRaw || (unitPrice && dose ? unitPrice * dose : 0);
+        const name = (colMap.name ? r[colMap.name] : r["처방명칭"] || "").toString().trim();
+
+        if (!v.codeMap.has(code)) {
+          v.codeMap.set(code, { code, name, dose: 0, amount: 0 });
+        }
+        const c = v.codeMap.get(code);
+        if (!c.name && name) c.name = name;
+        c.dose += dose;
+        c.amount += amount;
+        v.amount += amount;
+      }
+
+      const comboMap = new Map();
+      let totalVisits = 0;
+      let totalAmount = 0;
+
+      for (const v of visitMap.values()) {
+        const parts = Array.from(v.codeMap.values()).sort((a,b) => a.code.localeCompare(b.code, "ko", {numeric:true}));
+        if (!parts.length) continue;
+        totalVisits += 1;
+        totalAmount += v.amount;
+
+        const comboExpr = parts.map(p => `${p.code} ${formatDose(p.dose)}`).join(" + ");
+        const totalDose = parts.reduce((sum, p) => sum + p.dose, 0);
+        const key = `${comboExpr} = ${formatDose(totalDose)}`;
+
+        if (!comboMap.has(key)) {
+          comboMap.set(key, { combo: comboExpr, totalDose, count: 0, amountSum: 0, codeCount: parts.length });
+        }
+        const item = comboMap.get(key);
+        item.count += 1;
+        item.amountSum += v.amount;
+      }
+
+      const rowsOut = Array.from(comboMap.values())
+        .sort((a,b) => {
+          if (b.count !== a.count) return b.count - a.count;
+          if (b.amountSum !== a.amountSum) return b.amountSum - a.amountSum;
+          return a.combo.localeCompare(b.combo, "ko", {numeric:true});
+        })
+        .map((r, idx) => ({
+          rank: idx + 1,
+          combo: r.combo,
+          totalDose: r.totalDose,
+          avgAmount: r.count ? r.amountSum / r.count : 0,
+          count: r.count,
+          pct: totalVisits ? r.count / totalVisits * 100 : 0,
+          amountSum: r.amountSum,
+          codeCount: r.codeCount
+        }));
+
+      return { totalVisits, totalAmount, rows: rowsOut };
+    }
+
+    // ========== 추가정보: LA코드별 단가 리스트 ==========
+    function calcUnitPriceStats(rows) {
+      const map = new Map();
+
+      for (const r of rows) {
+        const code = normalizeLACode(colMap.code ? r[colMap.code] : null);
+        if (!code || !isLACode(code)) continue;
+
+        const name = (colMap.name ? r[colMap.name] : r["처방명칭"] || "").toString().trim();
+        const totalDoseVal = colMap.totalDose ? r[colMap.totalDose] : r["총투여량"];
+        const doseVal      = colMap.dose      ? r[colMap.dose]      : r["투여량"];
+        const daysVal      = colMap.days      ? r[colMap.days]      : r["투여일수"];
+        const dose = toNumber(totalDoseVal) || (toNumber(doseVal) * (toNumber(daysVal) || 1)) || 0;
+        const unitPrice = toNumber(colMap.unitPrice ? r[colMap.unitPrice] : r["단가"]);
+        const amountRaw = toNumber(colMap.amount ? r[colMap.amount] : r["금액"]);
+        const amount = amountRaw || (unitPrice && dose ? unitPrice * dose : 0);
+
+        if (!map.has(code)) {
+          map.set(code, { code, name, rowCount: 0, unitPriceSum: 0, unitPriceCount: 0, doseSum: 0, amountSum: 0 });
+        }
+        const item = map.get(code);
+        if (!item.name && name) item.name = name;
+        item.rowCount += 1;
+        item.doseSum += dose;
+        item.amountSum += amount;
+        if (unitPrice) {
+          item.unitPriceSum += unitPrice;
+          item.unitPriceCount += 1;
+        }
+      }
+
+      return Array.from(map.values())
+        .map(r => ({
+          code: r.code,
+          name: r.name,
+          rowCount: r.rowCount,
+          avgUnitPrice: r.unitPriceCount ? r.unitPriceSum / r.unitPriceCount : 0,
+          avgDose: r.rowCount ? r.doseSum / r.rowCount : 0,
+          avgAmount: r.rowCount ? r.amountSum / r.rowCount : 0,
+          amountSum: r.amountSum
+        }))
+        .sort((a,b) => a.code.localeCompare(b.code, "ko", {numeric:true}));
+    }
+
+    function renderComboDoseTable(comboDoseStats) {
+      if (!comboDoseStats || !comboDoseStats.rows.length) {
+        tableComboDoseWrapper.innerHTML = "<div class='hint'>선택한 기간에는 투여량 포함 조합 데이터가 없습니다.</div>";
+        return;
+      }
+
+      let html = "<table>";
+      html += "<thead><tr>";
+      html += "<th>순위</th>";
+      html += "<th>명칭 총투여량 + 명칭 총투여량</th>";
+      html += "<th>총투여량합</th>";
+      html += "<th>해당조합 금액<br/>(1건 평균)</th>";
+      html += "<th>조합건수</th>";
+      html += "<th>조합비율</th>";
+      html += "<th>전체조합비용</th>";
+      html += "</tr></thead><tbody>";
+
+      comboDoseStats.rows.forEach(r => {
+        html += "<tr>";
+        html += `<td>${r.rank}</td>`;
+        html += `<td>${r.combo}</td>`;
+        html += `<td class="num-red">${formatDose(r.totalDose)}</td>`;
+        html += `<td>${formatWon(r.avgAmount)}</td>`;
+        html += `<td>${formatInt(r.count)}</td>`;
+        html += `<td class="num-red">${r.pct.toFixed(2)}%</td>`;
+        html += `<td>${formatWon(r.amountSum)}</td>`;
+        html += "</tr>";
+      });
+
+      html += "<tr class='highlight'>";
+      html += "<td colspan='4'>전체 조합 합계</td>";
+      html += `<td>${formatInt(comboDoseStats.totalVisits)}</td>`;
+      html += "<td>100.00%</td>";
+      html += `<td>${formatWon(comboDoseStats.totalAmount)}</td>`;
+      html += "</tr>";
+      html += "</tbody></table>";
+      tableComboDoseWrapper.innerHTML = html;
+    }
+
+    function renderUnitPriceTable(unitRows) {
+      if (!unitRows || !unitRows.length) {
+        tableUnitPriceWrapper.innerHTML = "<div class='hint'>단가 데이터를 확인할 수 없습니다.</div>";
+        return;
+      }
+
+      let html = "<table>";
+      html += "<thead><tr>";
+      html += "<th>LA코드</th>";
+      html += "<th>처방명칭</th>";
+      html += "<th>단가</th>";
+      html += "<th>평균<br/>총투여량</th>";
+      html += "<th>건수</th>";
+      html += "</tr></thead><tbody>";
+
+      unitRows.forEach(r => {
+        html += "<tr>";
+        html += `<td>${r.code}</td>`;
+        html += `<td style="text-align:left;white-space:normal;min-width:140px;">${escapeHtml(r.name || "-")}</td>`;
+        html += `<td>${formatWon(r.avgUnitPrice)}</td>`;
+        html += `<td>${formatDose(r.avgDose)}</td>`;
+        html += `<td>${formatInt(r.rowCount)}</td>`;
+        html += "</tr>";
+      });
+
+      html += "</tbody></table>";
+      tableUnitPriceWrapper.innerHTML = html;
+    }
+
+
     // ========== 엑셀 다운로드 (현재 필터 기준) ==========
     function exportToExcel() {
       if (!allRows.length) {
@@ -1010,6 +1289,8 @@
 
       const stats = calcStats(filtered);
       const comboStats = calcComboStats(filtered);
+      const comboDoseStats = calcComboDoseStats(filtered);
+      const unitPriceStats = calcUnitPriceStats(filtered);
       const wb = XLSX.utils.book_new();
 
       const startLabel = realStart || "전체";
@@ -1122,6 +1403,31 @@
       const wsCombo = XLSX.utils.aoa_to_sheet(sheetCombo);
       XLSX.utils.book_append_sheet(wb, wsCombo, "LA코드조합");
 
+      // ④ 추가정보: 투여량 포함 조합 상세 시트
+      const sheetComboDose = [];
+      sheetComboDose.push([periodLabel]);
+      sheetComboDose.push([]);
+      sheetComboDose.push(["전체 조합건수", comboDoseStats.totalVisits]);
+      sheetComboDose.push(["전체조합비용", round2(comboDoseStats.totalAmount)]);
+      sheetComboDose.push([]);
+      sheetComboDose.push(["순위", "명칭 총투여량 + 명칭 총투여량", "총투여량합", "해당조합 금액(1건 평균)", "조합건수", "조합비율(%)", "전체조합비용"]);
+      comboDoseStats.rows.forEach(r => {
+        sheetComboDose.push([r.rank, r.combo, round2(r.totalDose), round2(r.avgAmount), r.count, round2(r.pct), round2(r.amountSum)]);
+      });
+      const wsComboDose = XLSX.utils.aoa_to_sheet(sheetComboDose);
+      XLSX.utils.book_append_sheet(wb, wsComboDose, "조합투여량금액");
+
+      // ⑤ LA코드별 단가 시트
+      const sheetUnit = [];
+      sheetUnit.push([periodLabel]);
+      sheetUnit.push([]);
+      sheetUnit.push(["LA코드", "처방명칭", "단가", "평균 총투여량", "건수", "평균 금액", "금액 합계"]);
+      unitPriceStats.forEach(r => {
+        sheetUnit.push([r.code, r.name, round2(r.avgUnitPrice), round2(r.avgDose), r.rowCount, round2(r.avgAmount), round2(r.amountSum)]);
+      });
+      const wsUnit = XLSX.utils.aoa_to_sheet(sheetUnit);
+      XLSX.utils.book_append_sheet(wb, wsUnit, "LA코드별단가");
+
       const today = new Date();
       const yyyy = today.getFullYear();
       const mm = String(today.getMonth() + 1).padStart(2, "0");
@@ -1146,6 +1452,10 @@
       tableSummaryWrapper.innerHTML = "";
       tableAgeWrapper.innerHTML = "";
       tableComboWrapper.innerHTML = "";
+      tableComboDoseWrapper.innerHTML = "";
+      tableUnitPriceWrapper.innerHTML = "";
+      extraInfoArea.classList.add("hidden");
+      btnToggleExtra.textContent = "추가정보 보기";
 
       laCodeListEl.textContent = "-";
       statusEl.textContent = "엑셀 파일을 선택하면 자동으로 분석합니다.";
@@ -1267,6 +1577,26 @@
         age--;
       }
       return age;
+    }
+
+    function formatDose(n) {
+      if (!isFinite(n)) return "0.0";
+      const rounded = Math.round(n * 100) / 100;
+      return rounded.toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 2 });
+    }
+
+    function formatWon(n) {
+      if (!isFinite(n)) return "0원";
+      return `${Math.round(n).toLocaleString()}원`;
+    }
+
+    function escapeHtml(value) {
+      return String(value ?? "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
     }
 
     function formatNumber(n) {
